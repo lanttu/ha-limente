@@ -10,7 +10,7 @@ import sys
 from bleak import BleakScanner
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from limente_ble import telink as tl  # noqa: E402
+from custom_components.limente import telink as tl  # noqa: E402
 
 
 async def main(seconds: float = 12.0) -> None:

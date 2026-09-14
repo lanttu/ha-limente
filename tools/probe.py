@@ -24,7 +24,7 @@ import sys
 from bleak import BleakClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from limente_ble import telink as tl  # noqa: E402
+from custom_components.limente import telink as tl  # noqa: E402
 
 
 def build(a: argparse.Namespace) -> tuple[int, bytes]:

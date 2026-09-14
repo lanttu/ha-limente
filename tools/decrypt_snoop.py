@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from limente_ble import telink as tl  # noqa: E402
+from custom_components.limente import telink as tl  # noqa: E402
 
 UUID_TAIL = {tl.PAIR_UUID[-4:]: "pair", tl.COMMAND_UUID[-4:]: "cmd", tl.STATUS_UUID[-4:]: "status"}
 
