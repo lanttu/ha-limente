@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+apk_src/
+*.apk
+*.log
+bugreport*
+*.xapk
+apk/
+
+# dev
+.venv/
+__pycache__/
+.pytest_cache/
+*.pklg

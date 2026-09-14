@@ -1,0 +1,25 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Limente SMART Bluetooth-mesh",
+        "description": "Anna mesh-verkon nimi ja salasana. Limente-sovelluksella käyttöönotetut valot, joita ei ole siirretty omaan verkkoon, käyttävät oletusarvoja. Kantaman sisällä olevat verkot: {found}",
+        "data": {
+          "mesh_name": "Mesh-verkon nimi",
+          "mesh_password": "Mesh-verkon salasana"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Himmentimeen ei saatu yhteyttä. Siirrä Bluetooth-sovitin lähemmäksi tai yritä uudelleen.",
+      "invalid_auth": "Himmennin hylkäsi mesh-verkon nimen tai salasanan.",
+      "no_devices_found": "Kantaman sisällä ei ole himmentimiä, jotka mainostavat tätä verkon nimeä."
+    },
+    "abort": {
+      "already_configured": "Tämä mesh-verkko on jo määritetty.",
+      "no_devices_found": "Limente-himmentimiä ei löytynyt Bluetooth-kantaman sisältä.",
+      "not_supported": "Tämä laite ei ole tuettu mesh-himmennin."
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Limente SMART Bluetooth mesh",
+        "description": "Enter the mesh network name and password. Lights set up with the Limente app and never moved to a custom network use the defaults. Meshes in range: {found}",
+        "data": {
+          "mesh_name": "Mesh network name",
+          "mesh_password": "Mesh password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to a dimmer. Move the Bluetooth adapter closer or try again.",
+      "invalid_auth": "The dimmer rejected the mesh name or password.",
+      "no_devices_found": "No dimmer advertising this mesh name is in Bluetooth range."
+    },
+    "abort": {
+      "already_configured": "This mesh network is already configured.",
+      "no_devices_found": "No Limente dimmers were found in Bluetooth range.",
+      "not_supported": "This device is not a supported mesh dimmer."
+    }
+  }
+}

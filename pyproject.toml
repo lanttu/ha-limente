@@ -1,0 +1,31 @@
+[project]
+name = "ha-limente"
+version = "0.1.0"
+description = "Home Assistant plugin for Limente dimmers"
+requires-python = ">=3.13.2,<3.14"
+dependencies = [
+    "bleak>=2.1",
+    "cryptography>=42",
+]
+
+[dependency-groups]
+dev = [
+    "aiousbwatcher==1.1.1",
+    "bleak==2.1.1",
+    "bleak-retry-connector==4.4.3",
+    "bluetooth-adapters==2.1.0",
+    "bluetooth-auto-recovery==1.5.3",
+    "bluetooth-data-tools==1.28.4",
+    "dbus-fast==3.1.2",
+    "habluetooth==5.8.0",
+    "homeassistant==2026.2.3",
+    "pyserial==3.5",
+    "pytest==9.0.0",
+    "pytest-asyncio>=0.20.3",
+    "pytest-homeassistant-custom-component==0.13.316",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::UserWarning:asyncinotify"]
