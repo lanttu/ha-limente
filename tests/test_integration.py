@@ -1,10 +1,12 @@
 """Config flow and light tests against a fake mesh node."""
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import time
 from unittest.mock import patch
 
+from bleak import BleakError
 import pytest
 
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
@@ -14,7 +16,14 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.limente import telink as tl
-from custom_components.limente.const import CONF_MESH_NAME, CONF_MESH_PASSWORD, DOMAIN
+from custom_components.limente.const import (
+    COMMAND_SPACING,
+    CONF_MESH_NAME,
+    CONF_MESH_PASSWORD,
+    DEVICE_TIMEOUT,
+    DOMAIN,
+    STATUS_INTERVAL,
+)
 
 from .fake_ble import ADV_MFR, NODE_ADDR, NODE_MAC, OTHER_ADDR, FakeMeshNode, ble_device
 
@@ -200,6 +209,74 @@ async def test_disconnect_marks_unavailable_and_reconnects(hass: HomeAssistant, 
     await _advance(hass, 5)
     assert node.is_connected
     assert hass.states.get("light.limente_dimmer_ac").state == "on"
+
+
+async def test_idle_nodes_stay_available(hass: HomeAssistant, mock_ble, node) -> None:
+    """A node that has been silent longer than DEVICE_TIMEOUT must still take commands
+    while the mesh reports it online. The connected node stops advertising, so this is
+    the normal case for it."""
+    entry = await _setup_entry(hass)
+    mesh = entry.runtime_data
+    stale = time.monotonic() - DEVICE_TIMEOUT - 1
+    for device in mesh.devices.values():
+        device.last_seen = stale
+    assert mesh.device_available(mesh.devices[NODE_ADDR])
+    assert mesh.device_available(mesh.devices[OTHER_ADDR])
+
+    before = len(node.commands)
+    await hass.services.async_call("light", "turn_off", {ATTR_ENTITY_ID: "light.limente_dimmer_ac"}, blocking=True)
+    await hass.async_block_till_done()
+    assert len(node.commands) > before, "HA dropped the call because the entity was unavailable"
+    assert node.commands[-1]["dest"] == NODE_ADDR
+    assert node.commands[-1]["opcode"] == tl.OP_ON_OFF
+
+
+async def test_mesh_offline_report_marks_unavailable(hass: HomeAssistant, mock_ble, node) -> None:
+    await _setup_entry(hass)
+    assert hass.states.get("light.limente_dimmer_e9").state == "off"
+
+    node.offline.add(OTHER_ADDR)
+    node.send_online_status()
+    await hass.async_block_till_done()
+    assert hass.states.get("light.limente_dimmer_e9").state == "unavailable"
+    assert hass.states.get("light.limente_dimmer_ac").state == "on"
+
+    before = len(node.commands)
+    await hass.services.async_call("light", "turn_on", {ATTR_ENTITY_ID: "light.limente_dimmer_e9"}, blocking=True)
+    await hass.async_block_till_done()
+    assert len(node.commands) == before
+
+    node.offline.discard(OTHER_ADDR)
+    node.send_online_status()
+    await hass.async_block_till_done()
+    assert hass.states.get("light.limente_dimmer_e9").state == "off"
+
+
+async def test_periodic_status_query(hass: HomeAssistant, mock_ble, node) -> None:
+    await _setup_entry(hass)
+    queries = lambda: [c for c in node.commands if c["opcode"] == tl.OP_STATUS_QUERY]  # noqa: E731
+    assert len(queries()) == 1
+
+    async def tick() -> None:
+        # The query is written from a background task that first waits out the
+        # command spacing, so give it real time to land.
+        await _advance(hass, STATUS_INTERVAL + 1)
+        await asyncio.sleep(COMMAND_SPACING + 0.05)
+        await hass.async_block_till_done()
+
+    await tick()
+    assert len(queries()) == 2
+    assert queries()[-1]["dest"] == tl.ADDR_BROADCAST
+    await tick()
+    assert len(queries()) == 3
+
+    # No more queries once the connection is gone.
+    await node.disconnect()
+    await hass.async_block_till_done()
+    node.commands.clear()
+    with patch("custom_components.limente.mesh.establish_connection", side_effect=BleakError("gone")):
+        await tick()
+    assert queries() == []
 
 
 async def test_setup_not_ready_without_nodes(hass: HomeAssistant, node) -> None:

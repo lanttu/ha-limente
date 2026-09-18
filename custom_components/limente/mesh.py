@@ -30,6 +30,7 @@ from .const import (
     DEVICE_TIMEOUT,
     RECONNECT_MAX,
     RECONNECT_MIN,
+    STATUS_INTERVAL,
     TELINK_MANUFACTURER_ID,
 )
 
@@ -52,7 +53,7 @@ class MeshDevice:
     is_on: bool = False
     brightness: int = 0            # 0..100 as reported; 0 when off
     last_brightness: int = 100     # last nonzero level, used when turning on
-    online: bool = False
+    online: bool | None = None     # last DC verdict; None until a DC report covers the node
     last_seen: float = 0.0         # monotonic time of last advert or status report
     listeners: set[Callable[[], None]] = field(default_factory=set)
 
@@ -121,6 +122,8 @@ class LimenteMesh:
         self._session_key: bytes | None = None
         self._nonce_mac: str | None = None
         self._connected_address: str | None = None
+        self._connected_node: MeshDevice | None = None
+        self._status_unsub: CALLBACK_TYPE | None = None
         self._seq = int.from_bytes(os.urandom(3), "little")
         self._send_lock = asyncio.Lock()
         self._connect_lock = asyncio.Lock()
@@ -157,6 +160,7 @@ class LimenteMesh:
         if self._reconnect_unsub:
             self._reconnect_unsub()
             self._reconnect_unsub = None
+        self._cancel_status_query()
         if self._connect_task and not self._connect_task.done():
             self._connect_task.cancel()
             try:
@@ -189,7 +193,16 @@ class LimenteMesh:
         return device
 
     def device_available(self, device: MeshDevice) -> bool:
-        return self.connected and time.monotonic() - device.last_seen < DEVICE_TIMEOUT
+        """The mesh's own online table decides once it has covered the node.
+
+        Idle nodes send nothing, and the node we are connected through stops
+        advertising, so silence alone must not make a node unavailable.
+        """
+        if not self.connected:
+            return False
+        if device.online is not None:
+            return device.online
+        return time.monotonic() - device.last_seen < DEVICE_TIMEOUT
 
     # ------------------------------------------------------------------ advertisements
 
@@ -299,13 +312,40 @@ class LimenteMesh:
             raise
         connected_node = self.get_or_create_device(adv["mesh_address"])
         connected_node.touch()
+        self._connected_node = connected_node
         self._set_connected(True)
         _LOGGER.info("Mesh %s: connected via %s", self.mesh_name, ble_device.address)
         # Ask every node to report; DC reports also arrive on their own.
+        await self._async_status_query()
+
+    async def _async_status_query(self) -> None:
+        """Broadcast a status query and schedule the next one."""
         try:
             await self._write_command(tl.ADDR_BROADCAST, tl.OP_STATUS_QUERY, b"\x10")
-        except HomeAssistantError:
-            pass
+        except HomeAssistantError as err:
+            _LOGGER.debug("Mesh %s: status query failed: %s", self.mesh_name, err)
+        self._schedule_status_query()
+
+    def _schedule_status_query(self) -> None:
+        self._cancel_status_query()
+        if self._stopped or not self.connected:
+            return
+
+        @callback
+        def _fire(_now: Any) -> None:
+            self._status_unsub = None
+            if self._stopped or not self.connected:
+                return
+            self.hass.async_create_background_task(
+                self._async_status_query(), f"limente mesh {self.mesh_name} status query", eager_start=True
+            )
+
+        self._status_unsub = async_call_later(self.hass, STATUS_INTERVAL, _fire)
+
+    def _cancel_status_query(self) -> None:
+        if self._status_unsub:
+            self._status_unsub()
+            self._status_unsub = None
 
     @callback
     def _on_disconnect(self, client: BleakClientWithServiceCache) -> None:
@@ -313,6 +353,8 @@ class LimenteMesh:
             return
         _LOGGER.info("Mesh %s: disconnected from %s", self.mesh_name, self._connected_address)
         self._client = self._session_key = self._nonce_mac = None
+        self._connected_node = None
+        self._cancel_status_query()
         self._set_connected(False)
         self._schedule_reconnect(RECONNECT_MIN)
 
@@ -327,10 +369,17 @@ class LimenteMesh:
             return
         note = tl.parse_notification(plain)
         opcode, params = note["opcode"], note["params"]
+        # Any valid notification proves the node we are connected through is alive.
+        if self._connected_node is not None:
+            self._connected_node.touch()
         if opcode == tl.OP_ONLINE_STATUS:
             for entry in tl.parse_online_status(params):
                 device = self.get_or_create_device(entry["mesh_address"])
                 device.online = entry["online"]
+                if not entry["online"]:
+                    # An offline entry carries no state, only the verdict.
+                    device.notify()
+                    continue
                 device.is_on = entry["on"]
                 device.brightness = entry["brightness"]
                 if entry["brightness"]:

@@ -30,6 +30,7 @@ class FakeMeshNode:
         self.commands: list[dict] = []
         self.notify_cb = None
         self.state = {NODE_ADDR: [True, 74], OTHER_ADDR: [False, 0]}  # addr -> [on, brightness]
+        self.offline: set[int] = set()  # addrs the mesh reports with sn 0
         self.disconnected_callback = None
         self.is_connected = True
         self.disconnect_calls = 0
@@ -104,7 +105,10 @@ class FakeMeshNode:
     def send_online_status(self) -> None:
         params = b""
         for addr, (on, br) in self.state.items():
-            params += bytes([addr, 0x60, br if on else 0, 0xFF])
+            if addr in self.offline:
+                params += bytes([addr, 0x00, 0x00, 0xFF])
+            else:
+                params += bytes([addr, 0x60, br if on else 0, 0xFF])
         self._notify(0, tl.OP_ONLINE_STATUS, params[:10])
 
     def send_device_info(self, addr: int) -> None:
