@@ -44,8 +44,8 @@ def node():
 
 
 @pytest.fixture
-def mock_ble(node):
-    """Patch HA's bluetooth helpers and the connection factory."""
+def mock_ble(node, mock_bluetooth):
+    """Mock Bluetooth hardware, HA's helpers, and the connection factory."""
     callbacks = []
 
     def register(hass, cb, matcher, mode):
