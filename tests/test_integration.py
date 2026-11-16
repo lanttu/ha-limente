@@ -29,6 +29,9 @@ from .fake_ble import ADV_MFR, NODE_ADDR, NODE_MAC, OTHER_ADDR, FakeMeshNode, bl
 
 MESH_NAME, MESH_PASSWORD = tl.DEFAULT_MESH_NAME, tl.DEFAULT_MESH_PASSWORD
 
+# Even empty-scan tests set up HA's Bluetooth dependencies.
+pytestmark = pytest.mark.usefixtures("mock_bluetooth")
+
 
 def service_info(address: str = NODE_MAC, name: str = MESH_NAME) -> BluetoothServiceInfoBleak:
     return BluetoothServiceInfoBleak(
@@ -44,8 +47,8 @@ def node():
 
 
 @pytest.fixture
-def mock_ble(node, mock_bluetooth):
-    """Mock Bluetooth hardware, HA's helpers, and the connection factory."""
+def mock_ble(node):
+    """Patch HA's bluetooth helpers and the connection factory."""
     callbacks = []
 
     def register(hass, cb, matcher, mode):
